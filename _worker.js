@@ -8,19 +8,13 @@ let ChatID = ''; // Can be empty, or get from /start in @userinfobot | 可以為
 let TG = 0; // For developers only, do not modify if you're a beginner. 1 to push all access info, 0 to not push subscription conversion backend access and abnormal access | 小白勿動，開發者專用，1 為推送所有的訪問信息，0 為不推送訂閱轉換後端的訪問信息與異常訪問
 let FileName = 'CF-Workers-SUB';
 let SUBUpdateTime = 6; // Custom subscription update time in hours | 自定義訂閱更新時間，單位小時
-let total = 99; // TB
+let total = 99;//TB
 let timestamp = 4102329600000; // 2099-12-31
 
-// Node links + subscription links | 節點鏈接 + 訂閱鏈接
+//节点链接 + 订阅链接
 let MainData = `
 https://raw.githubusercontent.com/mfuu/v2ray/master/v2ray
-https://raw.githubusercontent.com/peasoft/NoMoreWalls/master/list_raw.txt
-https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/v2ray.txt
-https://raw.githubusercontent.com/aiboboxx/v2rayfree/main/v2
-https://raw.githubusercontent.com/mahdibland/SSAggregator/master/sub/airport_sub_merge.txt
-https://raw.githubusercontent.com/mahdibland/SSAggregator/master/sub/sub_merge.txt
-https://raw.githubusercontent.com/Pawdroid/Free-servers/refs/heads/main/sub
-`
+`;
 
 let urls = [];
 let subConverter = "SUBAPI.cmliussss.net"; // Online subscription conversion backend, 
@@ -101,18 +95,18 @@ export default {
 			await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${userAgentHeader}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
 
 			let 订阅格式 = 'base64';
-			if (userAgent.includes('null') || userAgent.includes('subconverter') || userAgent.includes('nekobox') || userAgent.includes(('CF-Workers-SUB').toLowerCase())) {
-				订阅格式 = 'base64';
-			} else if (userAgent.includes('clash') || (url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
-				订阅格式 = 'clash';
-			} else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || ((url.searchParams.has('sb') || url.searchParams.has('singbox')) && !userAgent.includes('subconverter'))) {
-				订阅格式 = 'singbox';
-			} else if (userAgent.includes('surge') || (url.searchParams.has('surge') && !userAgent.includes('subconverter'))) {
-				订阅格式 = 'surge';
-			} else if (userAgent.includes('quantumult%20x') || (url.searchParams.has('quanx') && !userAgent.includes('subconverter'))) {
-				订阅格式 = 'quanx';
-			} else if (userAgent.includes('loon') || (url.searchParams.has('loon') && !userAgent.includes('subconverter'))) {
-				订阅格式 = 'loon';
+			if (!(userAgent.includes('null') || userAgent.includes('subconverter') || userAgent.includes('nekobox') || userAgent.includes(('CF-Workers-SUB').toLowerCase()))) {
+				if (userAgent.includes('sing-box') || userAgent.includes('singbox') || url.searchParams.has('sb') || url.searchParams.has('singbox')) {
+					订阅格式 = 'singbox';
+				} else if (userAgent.includes('surge') || url.searchParams.has('surge')) {
+					订阅格式 = 'surge';
+				} else if (userAgent.includes('quantumult') || url.searchParams.has('quanx')) {
+					订阅格式 = 'quanx';
+				} else if (userAgent.includes('loon') || url.searchParams.has('loon')) {
+					订阅格式 = 'loon';
+				} else if (userAgent.includes('clash') || userAgent.includes('meta')|| userAgent.includes('ComboShark')|| userAgent.includes('nikki') || userAgent.includes('mihomo') || url.searchParams.has('clash')) {
+					订阅格式 = 'clash';
+				}
 			}
 
 			let subConverterUrl;
@@ -128,10 +122,25 @@ export default {
 			else if (url.searchParams.has('quanx')) 追加UA = 'Quantumult%20X';
 			else if (url.searchParams.has('loon')) 追加UA = 'Loon';
 
-			const 请求订阅响应内容 = await getSUB(urls, request, 追加UA, userAgentHeader);
-			console.log(请求订阅响应内容);
-			req_data += 请求订阅响应内容[0].join('\n');
-			订阅转换URL += "|" + 请求订阅响应内容[1];
+			const 订阅链接数组 = [...new Set(urls)].filter(item => item?.trim?.()); // 去重
+			if (订阅链接数组.length > 0) {
+				const 请求订阅响应内容 = await getSUB(订阅链接数组, request, 追加UA, userAgentHeader);
+				console.log(请求订阅响应内容);
+				req_data += 请求订阅响应内容[0].join('\n');
+				订阅转换URL += "|" + 请求订阅响应内容[1];
+				if (订阅格式 == 'base64' && !userAgent.includes('subconverter') && 请求订阅响应内容[1].includes('://')) {
+					subConverterUrl = `${subProtocol}://${subConverter}/sub?target=mixed&url=${encodeURIComponent(请求订阅响应内容[1])}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=true&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+					try {
+						const subConverterResponse = await fetch(subConverterUrl);
+						if (subConverterResponse.ok) {
+							const subConverterContent = await subConverterResponse.text();
+							req_data += '\n' + atob(subConverterContent);
+						}
+					} catch (error) {
+						console.log('订阅转换请回base64失败，检查订阅转换后端是否正常运行');
+					}
+				}
+			}
 
 			if (env.WARP) 订阅转换URL += "|" + (await ADD(env.WARP)).join("|");
 			//修复中文错误
@@ -170,17 +179,19 @@ export default {
 					return base64.slice(0, base64.length - padding) + '=='.slice(0, padding);
 				}
 
-				base64Data = encodeBase64(result.replace(/\u0026/g, '&'))
+				base64Data = encodeBase64(result)
 			}
 
+			// 构建响应头对象
+			const responseHeaders = {
+				"content-type": "text/plain; charset=utf-8",
+				"Profile-Update-Interval": `${SUBUpdateTime}`,
+				"Profile-web-page-url": request.url.includes('?') ? request.url.split('?')[0] : request.url,
+				//"Subscription-Userinfo": `upload=${UD}; download=${UD}; total=${total}; expire=${expire}`,
+			};
+
 			if (订阅格式 == 'base64' || token == fakeToken) {
-				return new Response(base64Data, {
-					headers: {
-						"content-type": "text/plain; charset=utf-8",
-						"Profile-Update-Interval": `${SUBUpdateTime}`,
-						//"Subscription-Userinfo": `upload=${UD}; download=${UD}; total=${total}; expire=${expire}`,
-					}
-				});
+				return new Response(base64Data, { headers: responseHeaders });
 			} else if (订阅格式 == 'clash') {
 				subConverterUrl = `${subProtocol}://${subConverter}/sub?target=clash&url=${encodeURIComponent(订阅转换URL)}&insert=false&config=${encodeURIComponent(subConfig)}&emoji=true&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 			} else if (订阅格式 == 'singbox') {
@@ -194,48 +205,26 @@ export default {
 			}
 			//console.log(订阅转换URL);
 			try {
-				const subConverterResponse = await fetch(subConverterUrl);
-
-				if (!subConverterResponse.ok) {
-					return new Response(base64Data, {
-						headers: {
-							"content-type": "text/plain; charset=utf-8",
-							"Profile-Update-Interval": `${SUBUpdateTime}`,
-							//"Subscription-Userinfo": `upload=${UD}; download=${UD}; total=${total}; expire=${expire}`,
-						}
-					});
-					//throw new Error(`Error fetching subConverterUrl: ${subConverterResponse.status} ${subConverterResponse.statusText}`);
-				}
+				const subConverterResponse = await fetch(subConverterUrl);//订阅转换
+				if (!subConverterResponse.ok) return new Response(base64Data, { headers: responseHeaders });
 				let subConverterContent = await subConverterResponse.text();
 				if (订阅格式 == 'clash') subConverterContent = await clashFix(subConverterContent);
-				return new Response(subConverterContent, {
-					headers: {
-						"Content-Disposition": `attachment; filename*=utf-8''${encodeURIComponent(FileName)}`,
-						"content-type": "text/plain; charset=utf-8",
-						"Profile-Update-Interval": `${SUBUpdateTime}`,
-						//"Subscription-Userinfo": `upload=${UD}; download=${UD}; total=${total}; expire=${expire}`,
-
-					},
-				});
+				// 只有非浏览器订阅才会返回SUBNAME
+				if (!userAgent.includes('mozilla')) responseHeaders["Content-Disposition"] = `attachment; filename*=utf-8''${encodeURIComponent(FileName)}`;
+				return new Response(subConverterContent, { headers: responseHeaders });
 			} catch (error) {
-				return new Response(base64Data, {
-					headers: {
-						"content-type": "text/plain; charset=utf-8",
-						"Profile-Update-Interval": `${SUBUpdateTime}`,
-						//"Subscription-Userinfo": `upload=${UD}; download=${UD}; total=${total}; expire=${expire}`,
-					}
-				});
+				return new Response(base64Data, { headers: responseHeaders });
 			}
 		}
 	}
 };
 
 async function ADD(envadd) {
-	var addtext = envadd.replace(/[	"'|\r\n]+/g, ',').replace(/,+/g, ',');	// 将空格、双引号、单引号和换行符替换为逗号
+	var addtext = envadd.replace(/[	"'|\r\n]+/g, '\n').replace(/\n+/g, '\n');	// 替换为换行
 	//console.log(addtext);
-	if (addtext.charAt(0) == ',') addtext = addtext.slice(1);
-	if (addtext.charAt(addtext.length - 1) == ',') addtext = addtext.slice(0, addtext.length - 1);
-	const add = addtext.split(',');
+	if (addtext.charAt(0) == '\n') addtext = addtext.slice(1);
+	if (addtext.charAt(addtext.length - 1) == '\n') addtext = addtext.slice(0, addtext.length - 1);
+	const add = addtext.split('\n');
 	//console.log(add);
 	return add;
 }
@@ -294,6 +283,7 @@ async function sendMessage(type, ip, add_data = "") {
 	}
 }
 
+// 将 base64 编码的字符串转换为 utf-8 编码的字符
 function base64Decode(str) {
 	const bytes = new Uint8Array(atob(str).split('').map(c => c.charCodeAt(0)));
 	const decoder = new TextDecoder('utf-8');
@@ -606,7 +596,7 @@ async function KV(request, env, txt = 'ADD.txt', guest) {
 					Subscribe / sub  SUBURL, Click URL <strong> Copy SUB URL</strong> to <strong>Generate SUB QRcode</strong> <br>
 					---------------------------------------------------------------<br>
 					Auto  SUBURL:<br>
-					<a href="javascript:void(0)" onclick="copyToClipboard('https://${url.hostname}/${mytoken}?b64','qrcode_0')" style="color:blue;text-decoration:underline;cursor:pointer;">https://${url.hostname}/${mytoken}</a><br>
+					<a href="javascript:void(0)" onclick="copyToClipboard('https://${url.hostname}/${mytoken}?sub','qrcode_0')" style="color:blue;text-decoration:underline;cursor:pointer;">https://${url.hostname}/${mytoken}</a><br>
 					<div id="qrcode_0" style="margin: 10px 10px 10px 10px;"></div>
 					Base64 SUBURL:<br>
 					<a href="javascript:void(0)" onclick="copyToClipboard('https://${url.hostname}/${mytoken}?b64','qrcode_1')" style="color:blue;text-decoration:underline;cursor:pointer;">https://${url.hostname}/${mytoken}?b64</a><br>
@@ -627,7 +617,7 @@ async function KV(request, env, txt = 'ADD.txt', guest) {
 					<div id="noticeContent" class="notice-content" style="display: none;">
 						---------------------------------------------------------------<br>
 						Guest subscriptions can only be used with the subscription feature and cannot view the configuration page! | 访客订阅只能使用订阅功能，无法查看配置页！<br>
-						GUEST（访客订阅 TOKEN）: <strong>${guest}</strong><br>
+						GUEST 访客订阅 TOKEN: <strong>${guest}</strong><br>
 						---------------------------------------------------------------<br>
 						Auto  SUBURL:<br>
 						<a href="javascript:void(0)" onclick="copyToClipboard('https://${url.hostname}/sub?token=${guest}','guest_0')" style="color:blue;text-decoration:underline;cursor:pointer;">https://${url.hostname}/sub?token=${guest}</a><br>
@@ -650,7 +640,7 @@ async function KV(request, env, txt = 'ADD.txt', guest) {
 					</div>
 					---------------------------------------------------------------<br>
 					################################################################<br>
-					Subscription Conversion Configuration><br>
+					Subscription Conversion Config><br>
 					---------------------------------------------------------------<br>
 					SUBAPI 订阅转换BACKEND : <strong>${subProtocol}://${subConverter}</strong><br>
 					SUBCONFIG 订阅转换CONFIG: <strong>${subConfig}</strong><br>
@@ -663,7 +653,7 @@ async function KV(request, env, txt = 'ADD.txt', guest) {
 							placeholder="${decodeURIComponent(atob('TElOSyVFNyVBNCVCQSVFNCVCRSU4QiVFRiVCQyU4OCVFNCVCOCU4MCVFOCVBMSU4QyVFNCVCOCU4MCVFNCVCOCVBQSVFOCU4QSU4MiVFNyU4MiVCOSVFOSU5MyVCRSVFNiU4RSVBNSVFNSU4RCVCMyVFNSU4RiVBRiVFRiVCQyU4OSVFRiVCQyU5QQp2bGVzcyUzQSUyRiUyRjI0NmFhNzk1LTA2MzctNGY0Yy04ZjY0LTJjOGZiMjRjMWJhZCU0MDEyNy4wLjAuMSUzQTEyMzQlM0ZlbmNyeXB0aW9uJTNEbm9uZSUyNnNlY3VyaXR5JTNEdGxzJTI2c25pJTNEVEcuQ01MaXVzc3NzLmxvc2V5b3VyaXAuY29tJTI2YWxsb3dJbnNlY3VyZSUzRDElMjZ0eXBlJTNEd3MlMjZob3N0JTNEVEcuQ01MaXVzc3NzLmxvc2V5b3VyaXAuY29tJTI2cGF0aCUzRCUyNTJGJTI1M0ZlZCUyNTNEMjU2MCUyM0NGbmF0CnRyb2phbiUzQSUyRiUyRmFhNmRkZDJmLWQxY2YtNGE1Mi1iYTFiLTI2NDBjNDFhNzg1NiU0MDIxOC4xOTAuMjMwLjIwNyUzQTQxMjg4JTNGc2VjdXJpdHklM0R0bHMlMjZzbmklM0RoazEyLmJpbGliaWxpLmNvbSUyNmFsbG93SW5zZWN1cmUlM0QxJTI2dHlwZSUzRHRjcCUyNmhlYWRlclR5cGUlM0Rub25lJTIzSEsKc3MlM0ElMkYlMkZZMmhoWTJoaE1qQXRhV1YwWmkxd2IyeDVNVE13TlRveVJYUlFjVzQyU0ZscVZVNWpTRzlvVEdaVmNFWlJkMjVtYWtORFVUVnRhREZ0U21SRlRVTkNkV04xVjFvNVVERjFaR3RTUzBodVZuaDFielUxYXpGTFdIb3lSbTgyYW5KbmRERTRWelkyYjNCMGVURmxOR0p0TVdwNlprTm1RbUklMjUzRCU0MDg0LjE5LjMxLjYzJTNBNTA4NDElMjNERQoKCiVFOCVBRSVBMiVFOSU5OCU4NSVFOSU5MyVCRSVFNiU4RSVBNSVFNyVBNCVCQSVFNCVCRSU4QiVFRiVCQyU4OCVFNCVCOCU4MCVFOCVBMSU4QyVFNCVCOCU4MCVFNiU5RCVBMSVFOCVBRSVBMiVFOSU5OCU4NSVFOSU5MyVCRSVFNiU4RSVBNSVFNSU4RCVCMyVFNSU4RiVBRiVFRiVCQyU4OSVFRiVCQyU5QQpodHRwcyUzQSUyRiUyRnN1Yi54Zi5mcmVlLmhyJTJGYXV0bw=='))}"
 							id="content">${content}</textarea>
 						<div class="save-container">
-							<button class="save-btn" onclick="saveContent(this)"><b>Save</b></button>
+							<button class="save-btn" onclick="saveContent(this)"><b>Save Now</b></button>
 							<span class="save-status" id="saveStatus"></span>
 						</div>
 						` : '<p>Please Bind <strong> Var Name</strong> to <strong>KV</strong> KV Name Space</p>'}
@@ -716,7 +706,7 @@ async function KV(request, env, txt = 'ADD.txt', guest) {
 								// Detect if device is iOS | 檢測是否為iOS設備
 								const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 								
-								// Only execute replaceFullwidthColon on non-iOS devices | 僅在非iOS設備上執行replaceFullwidthColon
+								// Only run replaceFullwidthColon on non-iOS devices | 僅在非iOS設備上執行replaceFullwidthColon
 								if (!isIOS) {
 									replaceFullwidthColon();
 								}
